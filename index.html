@@ -1642,11 +1642,26 @@ function renderChat() {
       document.body.appendChild(overlayEl);
 
       menuEl = h('div', { class: 'menu' },
-        item('userPlus', 'Invite someone', (e) => {
-          if (e) e.stopPropagation();
+        item('userPlus', 'Invite someone', async () => {
           teardown(); open = false;
-          // Defer modal creation a tick so the menu's tap doesn't bleed into it
-          setTimeout(() => showInviteModal(session.roomKey), 0);
+          const url = location.href.split('?')[0].split('#')[0];
+          const text = buildInviteText('casual', url, session.roomKey);
+          // Prefer the native share sheet (offers WhatsApp, Messages, Mail, etc.)
+          if (navigator.share) {
+            try {
+              await navigator.share({ text });
+              return;
+            } catch (e) {
+              if (e && e.name === 'AbortError') return; // user cancelled
+              // fall through to clipboard
+            }
+          }
+          try {
+            await navigator.clipboard.writeText(text);
+            showToast('Invite copied — paste into WhatsApp');
+          } catch (e) {
+            showToast('Couldn\'t prepare invite');
+          }
         }),
         item('copy', 'Copy shared key', async () => {
           try { await navigator.clipboard.writeText(session.roomKey); showToast('Key copied'); }
