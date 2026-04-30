@@ -1046,10 +1046,15 @@ function renderSetup() {
   const root = document.getElementById('app');
   clearChildren(root);
 
+  // Detect if user arrived via an invite link (URL has ?join param).
+  // When true, default to Join mode with an empty key field so the
+  // recipient can immediately paste the key from their message.
+  const isInvited = new URLSearchParams(location.search).has('join');
+
   const state = {
     name: App.identity?.name || '',
-    mode: 'new',     // 'new' | 'join'
-    key: generateRandomKey(),
+    mode: isInvited ? 'join' : 'new',
+    key: isInvited ? '' : generateRandomKey(),
     showKey: false,
     busy: false,
     error: '',
@@ -1069,16 +1074,17 @@ function renderSetup() {
   );
   card.appendChild(head);
 
-  // Blurb
-  card.appendChild(h('p', { class: 'setup-blurb' },
-    'Encrypted messages between people who share a key. Only ciphertext leaves your device — the relay can\'t read it. Cached messages expire after about 12 hours.'
-  ));
+  // Blurb (different for invited users)
+  const blurbText = isInvited
+    ? 'You\'ve been invited to an encrypted chat. Paste the key from your message below, pick a name, and enter.'
+    : 'Encrypted messages between people who share a key. Only ciphertext leaves your device — the relay can\'t read it. Cached messages expire after about 12 hours.';
+  card.appendChild(h('p', { class: 'setup-blurb' }, blurbText));
 
   // Mode toggle
   const modeToggle = h('div', { class: 'mode-toggle' });
-  const newBtn = h('button', { class: 'active', onclick: () => setMode('new') },
+  const newBtn = h('button', { class: state.mode === 'new' ? 'active' : '', onclick: () => setMode('new') },
     h('span', { html: icon('plus', 15) }), 'New room');
-  const joinBtn = h('button', { onclick: () => setMode('join') },
+  const joinBtn = h('button', { class: state.mode === 'join' ? 'active' : '', onclick: () => setMode('join') },
     h('span', { html: icon('key', 15) }), 'Join room');
   modeToggle.append(newBtn, joinBtn);
   card.appendChild(modeToggle);
@@ -1201,8 +1207,8 @@ function renderSetup() {
     h('span', null, 'Messages are encrypted in your browser before leaving your device. Lose the key and the messages are unrecoverable — that\'s the point.')
   ));
 
-  // Update mode toggle handlers
-  setMode('new');
+  // Initialize toggle/buttons to match the chosen starting mode (new or join)
+  setMode(state.mode);
 
   async function submit() {
     state.error = '';
@@ -1247,9 +1253,12 @@ function renderSetup() {
 
   root.appendChild(wrap);
 
-  // Auto-focus first empty field
+  // Auto-focus the most useful field first.
+  // Invited users with empty key field → focus key (paste-first flow).
+  // Otherwise, focus name if empty, else key.
   setTimeout(() => {
-    if (!state.name) nameInput.focus();
+    if (isInvited && !state.key) keyInput.focus();
+    else if (!state.name) nameInput.focus();
     else keyInput.focus();
   }, 60);
 }
@@ -1357,7 +1366,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v7')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v9')
     )
   );
   shell.appendChild(composer);
@@ -1644,11 +1653,17 @@ function renderChat() {
       menuEl = h('div', { class: 'menu' },
         item('userPlus', 'Invite someone', () => {
           const pageUrl = location.href.split('?')[0].split('#')[0];
-          const text = buildInviteText('casual', pageUrl, session.roomKey);
-          // Open WhatsApp directly with the invite pre-filled.
-          // Done via a temporary anchor for best iOS Safari compatibility
-          // (window.open can be blocked, location.href would leave Hush).
-          const waUrl = 'https://wa.me/?text=' + encodeURIComponent(text);
+          // Append ?join so the recipient's setup screen defaults to "Join room"
+          // mode with an empty key field, ready for them to paste.
+          const shareUrl = pageUrl + '?join';
+          const introText = buildInviteIntro(shareUrl);
+          // Step 1: Put just the key on the clipboard so the user can paste
+          // it as a separate WhatsApp message after sending the intro.
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(session.roomKey).catch(() => {});
+          }
+          // Step 2: Open WhatsApp with the intro (link + instructions, no key).
+          const waUrl = 'https://wa.me/?text=' + encodeURIComponent(introText);
           const a = document.createElement('a');
           a.href = waUrl;
           a.target = '_blank';
@@ -1657,11 +1672,7 @@ function renderChat() {
           document.body.appendChild(a);
           a.click();
           setTimeout(() => a.remove(), 100);
-          // Also copy to clipboard as a backup, in case WhatsApp didn't open
-          if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).catch(() => {});
-          }
-          showToast('Opening WhatsApp…');
+          showToast('Send intro, then paste the key as a 2nd message');
           teardown(); open = false;
         }),
         item('copy', 'Copy shared key', async () => {
@@ -1730,6 +1741,18 @@ function renderChat() {
 /* =========================================================================
  *  INVITE MODAL
  * ========================================================================= */
+
+function buildInviteIntro(url) {
+  return [
+    'Hey — made us a private encrypted chat 🔒',
+    '',
+    '🔗 ' + url,
+    '',
+    'Tap the link, choose *Join room*, then paste the key (next message). Pick any name → enter.',
+    '',
+    'End-to-end encrypted. Only people with the key can read messages.'
+  ].join('\n');
+}
 
 function buildInviteText(variant, url, key) {
   if (variant === 'casual') {
