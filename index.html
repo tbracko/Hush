@@ -1357,7 +1357,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v6')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v7')
     )
   );
   shell.appendChild(composer);
@@ -1680,7 +1680,16 @@ function renderChat() {
           leave();
         })
       );
-      wrap.appendChild(menuEl);
+      // Position menu relative to trigger button. We append to document.body
+      // (not inside the header) because the header has backdrop-filter, which
+      // creates a separate rendering layer that puts the menu BELOW the
+      // body-mounted overlay — making menu items uninteractable.
+      const rect = trigger.getBoundingClientRect();
+      menuEl.style.position = 'fixed';
+      menuEl.style.top = (rect.bottom + 6) + 'px';
+      menuEl.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
+      menuEl.style.left = 'auto';
+      document.body.appendChild(menuEl);
     }
     function item(iconName, label, onClick, danger) {
       return h('button', {
