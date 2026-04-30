@@ -1357,7 +1357,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v5')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v6')
     )
   );
   shell.appendChild(composer);
@@ -1642,15 +1642,26 @@ function renderChat() {
       document.body.appendChild(overlayEl);
 
       menuEl = h('div', { class: 'menu' },
-        item('userPlus', 'Invite someone', async () => {
-          const url = location.href.split('?')[0].split('#')[0];
-          const text = buildInviteText('casual', url, session.roomKey);
-          try {
-            await navigator.clipboard.writeText(text);
-            showToast('Invite copied — paste into WhatsApp');
-          } catch (e) {
-            showToast('Copy failed');
+        item('userPlus', 'Invite someone', () => {
+          const pageUrl = location.href.split('?')[0].split('#')[0];
+          const text = buildInviteText('casual', pageUrl, session.roomKey);
+          // Open WhatsApp directly with the invite pre-filled.
+          // Done via a temporary anchor for best iOS Safari compatibility
+          // (window.open can be blocked, location.href would leave Hush).
+          const waUrl = 'https://wa.me/?text=' + encodeURIComponent(text);
+          const a = document.createElement('a');
+          a.href = waUrl;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => a.remove(), 100);
+          // Also copy to clipboard as a backup, in case WhatsApp didn't open
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).catch(() => {});
           }
+          showToast('Opening WhatsApp…');
           teardown(); open = false;
         }),
         item('copy', 'Copy shared key', async () => {
