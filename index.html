@@ -1357,7 +1357,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · ciphertext only')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v5')
     )
   );
   shell.appendChild(composer);
@@ -1643,25 +1643,15 @@ function renderChat() {
 
       menuEl = h('div', { class: 'menu' },
         item('userPlus', 'Invite someone', async () => {
-          teardown(); open = false;
           const url = location.href.split('?')[0].split('#')[0];
           const text = buildInviteText('casual', url, session.roomKey);
-          // Prefer the native share sheet (offers WhatsApp, Messages, Mail, etc.)
-          if (navigator.share) {
-            try {
-              await navigator.share({ text });
-              return;
-            } catch (e) {
-              if (e && e.name === 'AbortError') return; // user cancelled
-              // fall through to clipboard
-            }
-          }
           try {
             await navigator.clipboard.writeText(text);
             showToast('Invite copied — paste into WhatsApp');
           } catch (e) {
-            showToast('Couldn\'t prepare invite');
+            showToast('Copy failed');
           }
+          teardown(); open = false;
         }),
         item('copy', 'Copy shared key', async () => {
           try { await navigator.clipboard.writeText(session.roomKey); showToast('Key copied'); }
