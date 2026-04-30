@@ -563,8 +563,9 @@ textarea.field {
 .msg-col {
   display: flex;
   flex-direction: column;
-  max-width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: calc(100% - 40px);
 }
 .msg-row.mine .msg-col { align-items: flex-end; }
 .msg-row:not(.mine) .msg-col { align-items: flex-start; }
@@ -649,6 +650,76 @@ textarea.field {
 .modal-body { font-size: 13.5px; color: var(--text-1); line-height: 1.5; margin-bottom: 20px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* Invite modal */
+.invite-modal { max-width: 480px; padding: 22px; }
+.invite-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.invite-head .invite-title { font-size: 17px; font-weight: 600; }
+.invite-head .invite-sub {
+  font-size: 13px;
+  color: var(--text-1);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.invite-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-2);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  margin: 16px 0 12px;
+}
+.invite-tabs button {
+  padding: 8px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 160ms;
+}
+.invite-tabs button.active {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+.invite-preview {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-0);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  max-height: 280px;
+  overflow-y: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.invite-hint {
+  font-size: 11px;
+  color: var(--text-2);
+  margin: 8px 2px 0;
+  line-height: 1.5;
+}
+.invite-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+.invite-actions .btn { flex: 1; }
+
 /* Utility classes */
 .flex { display: flex; }
 .flex-col { display: flex; flex-direction: column; }
@@ -701,6 +772,9 @@ const ICONS = {
   more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   sparkles: '<path d="m12 3-1.9 5.8L4 11l5.8 1.9L12 19l1.9-5.8L20 11l-5.8-1.9L12 3z"/>',
+  userPlus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>',
+  share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 };
 
 function icon(name, size = 16, opts = {}) {
@@ -1564,6 +1638,10 @@ function renderChat() {
       document.body.appendChild(overlayEl);
 
       menuEl = h('div', { class: 'menu' },
+        item('userPlus', 'Invite someone', () => {
+          teardown(); open = false;
+          showInviteModal(session.roomKey);
+        }),
         item('copy', 'Copy shared key', async () => {
           try { await navigator.clipboard.writeText(session.roomKey); showToast('Key copied'); }
           catch (e) { showToast('Copy failed'); }
@@ -1616,6 +1694,180 @@ function renderChat() {
     App.session = null;
     renderSetup();
   }
+}
+
+/* =========================================================================
+ *  INVITE MODAL
+ * ========================================================================= */
+
+function buildInviteText(variant, url, key) {
+  if (variant === 'casual') {
+    return [
+      'Hey — made us a private chat 🔒',
+      '',
+      '*Link:* ' + url,
+      '',
+      '*Key:*',
+      '```' + key + '```',
+      '',
+      'Open the link, tap *Join room*, paste the key, pick any name. That\'s it.',
+      '',
+      'Messages are end-to-end encrypted — only people with this key can read them.'
+    ].join('\n');
+  }
+  if (variant === 'detailed') {
+    return [
+      'I set up an encrypted chat for us. No accounts, no signup, no app to install — works in any browser.',
+      '',
+      '🔗 ' + url,
+      '',
+      '🔑 ```' + key + '```',
+      '',
+      '*How to join:*',
+      '1. Open the link',
+      '2. Tap *Join room*',
+      '3. Paste the key above',
+      '4. Pick any display name → enter',
+      '',
+      'The messages get scrambled in your browser before they leave your phone, so the relay server can\'t read them — only people with the key can. Cached for ~12 hours then they\'re gone forever.',
+      '',
+      'Keep the key safe. Anyone with it can read everything.'
+    ].join('\n');
+  }
+  // minimal
+  return [
+    'private channel:',
+    '',
+    url,
+    '',
+    'key: ```' + key + '```',
+    '',
+    '→ tap _Join room_',
+    '→ paste key',
+    '→ pick a name',
+    '',
+    'end-to-end encrypted. no accounts. no logs. messages expire in ~12h.'
+  ].join('\n');
+}
+
+function showInviteModal(roomKey) {
+  // Clean URL: drop query and hash so the recipient gets the canonical app URL.
+  const url = location.href.split('?')[0].split('#')[0];
+
+  let variant = 'casual';
+
+  function currentText() {
+    return buildInviteText(variant, url, roomKey);
+  }
+
+  const overlay = h('div', { class: 'modal-overlay' });
+  const modal = h('div', { class: 'card modal invite-modal' });
+  modal.addEventListener('click', e => e.stopPropagation());
+  overlay.addEventListener('click', close);
+
+  function close() {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKey);
+
+  // Header
+  const closeBtn = h('button', {
+    class: 'btn btn-icon',
+    onclick: close,
+    html: icon('x', 17),
+    title: 'Close'
+  });
+  modal.appendChild(h('div', { class: 'invite-head' },
+    h('div', null,
+      h('div', { class: 'invite-title' }, 'Invite someone'),
+      h('div', { class: 'invite-sub' }, 'Pick a tone, then share. The key is filled in for you.')
+    ),
+    closeBtn
+  ));
+
+  // Tabs
+  const tabs = h('div', { class: 'invite-tabs' });
+  const tabDefs = [
+    { id: 'casual', label: 'Casual' },
+    { id: 'detailed', label: 'Detailed' },
+    { id: 'minimal', label: 'Minimal' },
+  ];
+  const tabButtons = {};
+  tabDefs.forEach(t => {
+    const b = h('button', {
+      class: variant === t.id ? 'active' : '',
+      onclick: () => {
+        variant = t.id;
+        for (const id in tabButtons) tabButtons[id].classList.toggle('active', id === variant);
+        preview.textContent = currentText();
+      }
+    }, t.label);
+    tabButtons[t.id] = b;
+    tabs.appendChild(b);
+  });
+  modal.appendChild(tabs);
+
+  // Preview
+  const preview = h('div', { class: 'invite-preview scroll-area' }, currentText());
+  modal.appendChild(preview);
+
+  // Hint
+  modal.appendChild(h('div', { class: 'invite-hint' },
+    '*bold* and ```code``` format automatically when sent through WhatsApp.'
+  ));
+
+  // Actions
+  const shareBtn = h('button', {
+    class: 'btn btn-primary',
+    onclick: async () => {
+      const text = currentText();
+      // Try Web Share API first — opens native share sheet on iOS/Android
+      // with WhatsApp, Messages, Mail, etc.
+      if (navigator.share) {
+        try {
+          await navigator.share({ text });
+          close();
+          return;
+        } catch (e) {
+          // User cancelled or error — fall through to clipboard
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard');
+        close();
+      } catch (e) {
+        showToast('Couldn\'t share — try Copy');
+      }
+    }
+  },
+    h('span', { html: icon('share', 16, { stroke: '#04221a', strokeWidth: 2.5 }) }),
+    h('span', null, 'Share…')
+  );
+
+  const copyBtn = h('button', {
+    class: 'btn btn-ghost',
+    onclick: async () => {
+      const text = currentText();
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('Copied');
+        close();
+      } catch (e) { showToast('Copy failed'); }
+    }
+  },
+    h('span', { html: icon('copy', 16) }),
+    h('span', null, 'Copy')
+  );
+
+  modal.appendChild(h('div', { class: 'invite-actions' }, copyBtn, shareBtn));
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 }
 
 /* =========================================================================
