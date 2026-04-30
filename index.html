@@ -1642,9 +1642,11 @@ function renderChat() {
       document.body.appendChild(overlayEl);
 
       menuEl = h('div', { class: 'menu' },
-        item('userPlus', 'Invite someone', () => {
+        item('userPlus', 'Invite someone', (e) => {
+          if (e) e.stopPropagation();
           teardown(); open = false;
-          showInviteModal(session.roomKey);
+          // Defer modal creation a tick so the menu's tap doesn't bleed into it
+          setTimeout(() => showInviteModal(session.roomKey), 0);
         }),
         item('copy', 'Copy shared key', async () => {
           try { await navigator.clipboard.writeText(session.roomKey); showToast('Key copied'); }
@@ -1767,7 +1769,6 @@ function showInviteModal(roomKey) {
   const overlay = h('div', { class: 'modal-overlay' });
   const modal = h('div', { class: 'card modal invite-modal' });
   modal.addEventListener('click', e => e.stopPropagation());
-  overlay.addEventListener('click', close);
 
   function close() {
     overlay.remove();
@@ -1775,6 +1776,12 @@ function showInviteModal(roomKey) {
   }
   function onKey(e) { if (e.key === 'Escape') close(); }
   document.addEventListener('keydown', onKey);
+
+  // Defer attaching the overlay-click-to-close handler, so the same tap that
+  // opened this modal (from the menu) doesn't immediately close it on mobile.
+  setTimeout(() => {
+    overlay.addEventListener('click', close);
+  }, 300);
 
   // Header
   const closeBtn = h('button', {
