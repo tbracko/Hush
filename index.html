@@ -336,6 +336,27 @@ textarea.field {
   margin: 0 0 22px 0;
 }
 
+.invite-target-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(0, 217, 127, 0.07);
+  border: 1px solid rgba(0, 217, 127, 0.2);
+  border-radius: 12px;
+  margin-bottom: 18px;
+  font-size: 13.5px;
+  color: var(--text-1);
+}
+.invite-target-pill strong {
+  color: var(--text-0);
+  font-weight: 600;
+  margin-left: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mode-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1543,11 +1564,22 @@ function renderSetup() {
   // recipient can immediately paste the key from their message.
   const isInvited = new URLSearchParams(location.search).has('join');
 
+  // Parse invited room name from URL hash (e.g. #name=Family%20Chat).
+  // Hash isn't sent to any server, so the name stays private to the link.
+  let invitedRoomName = '';
+  if (isInvited && location.hash) {
+    try {
+      const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+      const n = hashParams.get('name');
+      if (n) invitedRoomName = n.slice(0, 40);
+    } catch (e) {}
+  }
+
   const state = {
     name: App.identity?.name || '',
     mode: isInvited ? 'join' : 'new',
     key: isInvited ? '' : generateRandomKey(),
-    roomName: '',
+    roomName: invitedRoomName,
     showKey: false,
     busy: false,
     error: '',
@@ -1578,10 +1610,24 @@ function renderSetup() {
   card.appendChild(head);
 
   // Blurb (different for invited users)
-  const blurbText = isInvited
-    ? 'You\'ve been invited to an encrypted chat. Paste the key from your message below, pick a name, and enter.'
-    : 'Encrypted messages between people who share a key. Only ciphertext leaves your device — the relay can\'t read it. Cached messages expire after about 12 hours.';
+  let blurbText;
+  if (isInvited && invitedRoomName) {
+    blurbText = 'You\'ve been invited to join an encrypted chat. Paste the key from your message below, pick a name, and enter.';
+  } else if (isInvited) {
+    blurbText = 'You\'ve been invited to an encrypted chat. Paste the key from your message below, pick a name, and enter.';
+  } else {
+    blurbText = 'Encrypted messages between people who share a key. Only ciphertext leaves your device — the relay can\'t read it. Cached messages expire after about 12 hours.';
+  }
   card.appendChild(h('p', { class: 'setup-blurb' }, blurbText));
+
+  // If we know the room name from the invite link, show a clear "Joining: X" pill
+  if (isInvited && invitedRoomName) {
+    card.appendChild(h('div', { class: 'invite-target-pill' },
+      h('span', { html: icon('messageSquare', 14, { stroke: '#00d97f' }) }),
+      h('span', null, 'Joining'),
+      h('strong', null, invitedRoomName)
+    ));
+  }
 
   // Mode toggle
   const modeToggle = h('div', { class: 'mode-toggle' });
@@ -1624,7 +1670,8 @@ function renderSetup() {
   }
 
   // Room nickname (local-only label so multi-chat list is readable)
-  card.appendChild(h('label', { class: 'field-label', style: { marginTop: '18px' } }, 'Room name (just for you)'));
+  card.appendChild(h('label', { class: 'field-label', style: { marginTop: '18px' } },
+    invitedRoomName ? 'Room name' : 'Room name (just for you)'));
   const roomNameInput = h('input', {
     class: 'field',
     type: 'text',
@@ -1637,7 +1684,9 @@ function renderSetup() {
   card.appendChild(h('div', {
     class: 'fs-12 muted',
     style: { marginTop: '6px', lineHeight: '1.5' }
-  }, 'A label only you see — helps you find this room in your list.'));
+  }, invitedRoomName
+      ? 'Suggested by the person who invited you. You can change it — only you see this label.'
+      : 'A label only you see — helps you find this room in your list.'));
 
   // Key field
   card.appendChild(h('label', { class: 'field-label', style: { marginTop: '18px' } }, 'Shared key'));
@@ -1894,7 +1943,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v10')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v11')
     )
   );
   shell.appendChild(composer);
@@ -2181,10 +2230,13 @@ function renderChat() {
       menuEl = h('div', { class: 'menu' },
         item('userPlus', 'Invite someone', () => {
           const pageUrl = location.href.split('?')[0].split('#')[0];
-          // Append ?join so the recipient's setup screen defaults to "Join room"
-          // mode with an empty key field, ready for them to paste.
-          const shareUrl = pageUrl + '?join';
-          const introText = buildInviteIntro(shareUrl);
+          // Build share URL: ?join puts recipient on Join screen,
+          // #name=... pre-fills the room name (hash isn't sent to any server).
+          let shareUrl = pageUrl + '?join';
+          if (session.roomName) {
+            shareUrl += '#name=' + encodeURIComponent(session.roomName);
+          }
+          const introText = buildInviteIntro(shareUrl, session.roomName);
           // Step 1: Put just the key on the clipboard so the user can paste
           // it as a separate WhatsApp message after sending the intro.
           if (navigator.clipboard) {
@@ -2269,9 +2321,12 @@ function renderChat() {
  *  INVITE MODAL
  * ========================================================================= */
 
-function buildInviteIntro(url) {
+function buildInviteIntro(url, roomName) {
+  const greeting = roomName
+    ? 'Hey — I\'m inviting you to *' + roomName + '* 🔒'
+    : 'Hey — made us a private encrypted chat 🔒';
   return [
-    'Hey — made us a private encrypted chat 🔒',
+    greeting,
     '',
     '🔗 ' + url,
     '',
