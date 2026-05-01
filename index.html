@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -9,11 +8,24 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <meta name="description" content="Hush — end-to-end encrypted chat. No accounts, no servers we own. Just AES-256 ciphertext relayed through a public broker." />
+
+<!-- iOS Add-to-Home-Screen support: makes Hush launch as a fullscreen app -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Hush" />
+<meta name="mobile-web-app-capable" content="yes" />
+
 <title>Hush — Encrypted Chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<!-- App icon (also used by iOS for home screen) -->
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%2300d97f'/><path d='M8 11V8a4 4 0 1 1 8 0v3' stroke='%2304221a' stroke-width='2' fill='none' stroke-linecap='round'/><rect x='6' y='11' width='12' height='9' rx='2' fill='%2304221a'/></svg>" />
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%2300d97f'/><path d='M60 82V60a30 30 0 1 1 60 0v22' stroke='%2304221a' stroke-width='14' fill='none' stroke-linecap='round'/><rect x='45' y='82' width='90' height='68' rx='14' fill='%2304221a'/></svg>" />
+
+<!-- Web App Manifest (inline data URL — keeps single-file deployment) -->
+<link rel="manifest" href='data:application/manifest+json,{"name":"Hush","short_name":"Hush","start_url":"./","display":"standalone","background_color":"%230b0d10","theme_color":"%230b0d10","orientation":"portrait","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 192 192%27><rect width=%27192%27 height=%27192%27 rx=%2742%27 fill=%27%2300d97f%27/><path d=%27M64 88V64a32 32 0 1 1 64 0v24%27 stroke=%27%2304221a%27 stroke-width=%2715%27 fill=%27none%27 stroke-linecap=%27round%27/><rect x=%2748%27 y=%2788%27 width=%2796%27 height=%2772%27 rx=%2715%27 fill=%27%2304221a%27/></svg>","sizes":"192x192","type":"image/svg+xml","purpose":"any maskable"},{"src":"data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27><rect width=%27512%27 height=%27512%27 rx=%27112%27 fill=%27%2300d97f%27/><path d=%27M170 234V170a86 86 0 1 1 172 0v64%27 stroke=%27%2304221a%27 stroke-width=%2740%27 fill=%27none%27 stroke-linecap=%27round%27/><rect x=%27128%27 y=%27234%27 width=%27256%27 height=%27192%27 rx=%2740%27 fill=%27%2304221a%27/></svg>","sizes":"512x512","type":"image/svg+xml","purpose":"any maskable"}]}' />
 
 <style>
 :root {
@@ -591,6 +603,131 @@ textarea.field {
   font-family: 'IBM Plex Mono', monospace;
 }
 
+/* Rooms list */
+.rooms-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.rooms-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.rooms-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 24px;
+  -webkit-overflow-scrolling: touch;
+}
+.rooms-list {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+.rooms-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+}
+.rooms-footer-hint {
+  max-width: 760px;
+  margin: 24px auto 8px;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+.room-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  margin-top: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms ease, transform 80ms ease, border-color 160ms ease;
+  font-family: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.room-card:hover {
+  background: var(--bg-2);
+  border-color: #354050;
+}
+.room-card:active { transform: scale(0.99); }
+.room-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: #0b0d10;
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.6);
+}
+.room-info {
+  flex: 1;
+  min-width: 0;
+}
+.room-name {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--text-0);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-meta {
+  font-size: 11.5px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.room-meta .sep { opacity: 0.5; }
+.room-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+.unread-badge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #04221a;
+  font-size: 12px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 14px -2px rgba(0, 217, 127, 0.6);
+}
+.room-chevron { display: flex; opacity: 0.5; }
+
+/* Header room name should be allowed to truncate */
+.header-room-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
 /* Composer */
 .composer {
   padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
@@ -743,7 +880,6 @@ textarea.field {
 /* Icon sizing inside SVG */
 .icon { display: inline-block; flex-shrink: 0; }
 </style>
-
 </head>
 <body>
 
@@ -771,6 +907,10 @@ const ICONS = {
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
   arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  arrowLeft: '<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
+  messageSquare: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
   trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
@@ -1025,17 +1165,369 @@ function showToast(message) {
 }
 
 /* =========================================================================
+ *  ROOMS REGISTRY
+ *  Multi-chat support: a list of saved rooms persists in localStorage.
+ *  Each entry stores everything needed to re-derive the session — including
+ *  the passphrase. This means anyone with access to your device can read your
+ *  chats. We trade a bit of security for huge UX wins (rooms persist across
+ *  sessions, no re-typing keys).
+ * ========================================================================= */
+
+const ROOMS_KEY = 'hush.rooms.v1';
+const LAST_ROOM_KEY = 'hush.lastRoom.v1';
+
+function loadRooms() {
+  try {
+    const raw = localStorage.getItem(ROOMS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+
+function saveRooms(rooms) {
+  try { localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms)); } catch (e) {}
+}
+
+function findRoomByTopic(rooms, topic) {
+  return rooms.find(r => r.topic === topic) || null;
+}
+
+function findRoomByKey(rooms, key) {
+  return rooms.find(r => r.roomKey === key) || null;
+}
+
+function upsertRoom(room) {
+  const rooms = loadRooms();
+  const idx = rooms.findIndex(r => r.topic === room.topic);
+  if (idx >= 0) rooms[idx] = { ...rooms[idx], ...room };
+  else rooms.unshift(room);
+  saveRooms(rooms);
+  return rooms;
+}
+
+function removeRoom(topic) {
+  const rooms = loadRooms().filter(r => r.topic !== topic);
+  saveRooms(rooms);
+  return rooms;
+}
+
+function setLastRoom(topic) {
+  try {
+    if (topic) localStorage.setItem(LAST_ROOM_KEY, topic);
+    else localStorage.removeItem(LAST_ROOM_KEY);
+  } catch (e) {}
+}
+
+function getLastRoom() {
+  try { return localStorage.getItem(LAST_ROOM_KEY); } catch (e) { return null; }
+}
+
+/* =========================================================================
  *  APP STATE
  * ========================================================================= */
 
 const App = {
   identity: null,        // { name, tag }
-  session: null,         // { roomKey, topic, cryptoKey, transport, messages, seenIds, participants }
+  session: null,         // active room session, see openRoom()
+  view: 'rooms',         // 'rooms' | 'setup' | 'chat'
 };
 
 function userHandle() {
   if (!App.identity) return '?';
   return `${App.identity.name}#${App.identity.tag}`;
+}
+
+/* =========================================================================
+ *  ROOM NAVIGATION
+ * ========================================================================= */
+
+async function openRoom(topic) {
+  // Disconnect any current session before opening a new one
+  if (App.session?.transport) {
+    try { App.session.transport.disconnect(); } catch (e) {}
+  }
+
+  const room = findRoomByTopic(loadRooms(), topic);
+  if (!room) {
+    showToast('Room not found');
+    return goToRoomsList();
+  }
+
+  // Derive crypto key from stored passphrase
+  const { cryptoKey } = await deriveSession(room.roomKey);
+
+  App.session = {
+    roomKey: room.roomKey,
+    topic: room.topic,
+    roomName: room.name,
+    cryptoKey,
+    transport: null,
+    messages: [],
+    seenIds: new Set(),
+    seenNonces: new Set(),
+    participants: new Set([userHandle()]),
+    connStatus: 'connecting',
+  };
+  App.view = 'chat';
+
+  // Mark as last opened, clear unread
+  setLastRoom(topic);
+  upsertRoom({ ...room, unread: 0, lastSeen: Date.now() });
+
+  renderChat();
+}
+
+function goToRoomsList() {
+  if (App.session?.transport) {
+    try { App.session.transport.disconnect(); } catch (e) {}
+  }
+  App.session = null;
+  App.view = 'rooms';
+  setLastRoom(null);
+  renderRoomsList();
+}
+
+function goToSetup() {
+  if (App.session?.transport) {
+    try { App.session.transport.disconnect(); } catch (e) {}
+  }
+  App.session = null;
+  App.view = 'setup';
+  renderSetup();
+}
+
+/* =========================================================================
+ *  ROOMS LIST SCREEN
+ * ========================================================================= */
+
+function renderRoomsList() {
+  const root = document.getElementById('app');
+  clearChildren(root);
+  App.view = 'rooms';
+
+  const rooms = loadRooms();
+
+  const shell = h('div', { class: 'rooms-shell' });
+
+  // Header
+  const header = h('header', { class: 'header rooms-header' },
+    h('div', { class: 'logo-mark small', html: icon('lock', 17, { stroke: '#04221a', strokeWidth: 2.5 }) }),
+    h('div', { class: 'header-info' },
+      h('div', { class: 'header-title' },
+        h('span', null, 'Hush'),
+        h('span', { class: 'pill' },
+          h('span', { html: icon('shield', 11) }), 'E2EE'
+        )
+      ),
+      h('div', { class: 'header-meta' },
+        App.identity ? h('span', { class: 'mono' },
+          App.identity.name, h('span', { style: { opacity: 0.6 } }, '#' + App.identity.tag)
+        ) : null,
+        rooms.length > 0 ? h('span', { class: 'sep' }, '·') : null,
+        rooms.length > 0 ? h('span', null, rooms.length + (rooms.length === 1 ? ' room' : ' rooms')) : null,
+      )
+    ),
+    h('button', {
+      class: 'btn btn-icon',
+      onclick: goToSetup,
+      title: 'Add room',
+      html: icon('plus', 20)
+    })
+  );
+  shell.appendChild(header);
+
+  // Body
+  const body = h('div', { class: 'rooms-body scroll-area' });
+
+  if (rooms.length === 0) {
+    body.appendChild(renderRoomsEmpty());
+  } else {
+    const list = h('div', { class: 'rooms-list' });
+    rooms.forEach(room => {
+      list.appendChild(renderRoomCard(room));
+    });
+    body.appendChild(list);
+
+    // Footer hint
+    body.appendChild(h('div', { class: 'rooms-footer-hint' },
+      h('span', { html: icon('shield', 12) }),
+      h('span', null, 'All rooms encrypted with AES-256-GCM. Lose a key, lose the room.')
+    ));
+  }
+
+  shell.appendChild(body);
+  root.appendChild(shell);
+}
+
+function renderRoomsEmpty() {
+  return h('div', { class: 'rooms-empty' },
+    h('div', { class: 'empty-card' },
+      h('div', { class: 'empty-icon', html: icon('messageSquare', 28, { stroke: '#00d97f' }) }),
+      h('div', { class: 'empty-title' }, 'No rooms yet'),
+      h('div', { class: 'empty-body' },
+        'Create a new private room or join one with a key someone shared with you.'
+      ),
+      h('button', {
+        class: 'btn btn-primary',
+        onclick: goToSetup,
+        style: { marginTop: '20px' }
+      },
+        h('span', { html: icon('plus', 16, { stroke: '#04221a', strokeWidth: 2.5 }) }),
+        h('span', null, 'Add a room')
+      )
+    )
+  );
+}
+
+function renderRoomCard(room) {
+  const av = avatarFor(room.name || room.topic);
+  const card = h('button', {
+    class: 'room-card',
+    onclick: () => openRoom(room.topic)
+  });
+
+  card.appendChild(h('div', {
+    class: 'room-avatar',
+    style: { background: `linear-gradient(135deg, ${av.a}, ${av.b})` }
+  }, (room.name || '?')[0].toUpperCase()));
+
+  const info = h('div', { class: 'room-info' });
+  info.appendChild(h('div', { class: 'room-name' }, room.name || 'Untitled room'));
+  info.appendChild(h('div', { class: 'room-meta mono' },
+    shortId(room.topic),
+    h('span', { class: 'sep' }, '·'),
+    h('span', null, formatRelativeTime(room.lastSeen || room.createdAt))
+  ));
+  card.appendChild(info);
+
+  // Right side: chevron
+  const right = h('div', { class: 'room-right' });
+  right.appendChild(h('span', { class: 'room-chevron', html: icon('arrowRight', 16) }));
+  card.appendChild(right);
+
+  // Long-press / right-click → quick menu (delete)
+  let pressTimer = null;
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showRoomMenu(room, card);
+  });
+  card.addEventListener('touchstart', (e) => {
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      // Cancel the click that's about to fire
+      card.dataset.suppressClick = '1';
+      showRoomMenu(room, card);
+    }, 550);
+  }, { passive: true });
+  const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+  card.addEventListener('touchend', cancelPress);
+  card.addEventListener('touchmove', cancelPress);
+  card.addEventListener('touchcancel', cancelPress);
+  // Suppress click after a long-press
+  card.addEventListener('click', (e) => {
+    if (card.dataset.suppressClick) {
+      delete card.dataset.suppressClick;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
+  return card;
+}
+
+function showRoomMenu(room, anchorEl) {
+  const overlay = h('div', { class: 'menu-overlay' });
+  const rect = anchorEl.getBoundingClientRect();
+
+  function close() {
+    overlay.remove();
+    menu.remove();
+  }
+  overlay.addEventListener('click', close);
+
+  const menu = h('div', { class: 'menu' },
+    h('button', {
+      class: 'menu-item',
+      onclick: () => {
+        close();
+        openRoom(room.topic);
+      }
+    }, h('span', { html: icon('arrowRight', 15) }), 'Open'),
+    h('button', {
+      class: 'menu-item',
+      onclick: async () => {
+        close();
+        try {
+          await navigator.clipboard.writeText(room.roomKey);
+          showToast('Key copied');
+        } catch (e) { showToast('Copy failed'); }
+      }
+    }, h('span', { html: icon('copy', 15) }), 'Copy key'),
+    h('div', { class: 'menu-divider' }),
+    h('button', {
+      class: 'menu-item danger',
+      onclick: () => {
+        close();
+        confirmRemoveRoom(room);
+      }
+    }, h('span', { html: icon('trash', 15) }), 'Remove room')
+  );
+
+  menu.style.position = 'fixed';
+  // Position centered to anchor; clamp to viewport
+  const top = Math.min(rect.bottom + 6, window.innerHeight - 220);
+  const right = Math.max(12, window.innerWidth - rect.right);
+  menu.style.top = top + 'px';
+  menu.style.right = right + 'px';
+  menu.style.minWidth = '180px';
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(menu);
+}
+
+function confirmRemoveRoom(room) {
+  const overlay = h('div', { class: 'modal-overlay' });
+  const close = () => overlay.remove();
+
+  const modal = h('div', { class: 'card modal', onclick: e => e.stopPropagation() });
+  modal.appendChild(h('div', { class: 'modal-title' }, 'Remove this room?'));
+  modal.appendChild(h('div', { class: 'modal-body' },
+    'Removing forgets the key locally on this device. Other members keep the room. ',
+    'You can rejoin later if someone shares the key with you again.'
+  ));
+  modal.appendChild(h('div', { class: 'modal-actions' },
+    h('button', { class: 'btn btn-ghost', onclick: close }, 'Cancel'),
+    h('button', {
+      class: 'btn btn-danger',
+      onclick: () => {
+        removeRoom(room.topic);
+        if (App.session?.topic === room.topic) {
+          if (App.session.transport) try { App.session.transport.disconnect(); } catch (e) {}
+          App.session = null;
+        }
+        close();
+        renderRoomsList();
+        showToast('Room removed');
+      }
+    }, 'Remove')
+  ));
+
+  // Defer overlay click handler so the long-press tap doesn't immediately close
+  setTimeout(() => overlay.addEventListener('click', close), 250);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+function formatRelativeTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  const min = 60 * 1000, hr = 60 * min, day = 24 * hr;
+  if (diff < min) return 'just now';
+  if (diff < hr) return Math.floor(diff / min) + 'm ago';
+  if (diff < day) return Math.floor(diff / hr) + 'h ago';
+  if (diff < 7 * day) return Math.floor(diff / day) + 'd ago';
+  return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 /* =========================================================================
@@ -1055,6 +1547,7 @@ function renderSetup() {
     name: App.identity?.name || '',
     mode: isInvited ? 'join' : 'new',
     key: isInvited ? '' : generateRandomKey(),
+    roomName: '',
     showKey: false,
     busy: false,
     error: '',
@@ -1064,14 +1557,24 @@ function renderSetup() {
   const card = h('div', { class: 'card setup-card' });
   wrap.appendChild(card);
 
-  // Head
-  const head = h('div', { class: 'setup-head' },
-    h('div', { class: 'logo-mark', html: icon('lock', 26, { stroke: '#04221a', strokeWidth: 2.5 }) }),
-    h('div', null,
-      h('div', { class: 'setup-title' }, 'Hush'),
-      h('div', { class: 'setup-subtitle mono' }, 'End-to-end · AES-256-GCM')
-    )
-  );
+  const hasExistingRooms = loadRooms().length > 0;
+
+  // Head — with back button if user has existing rooms
+  const head = h('div', { class: 'setup-head' });
+  if (hasExistingRooms) {
+    head.appendChild(h('button', {
+      class: 'btn btn-icon',
+      onclick: goToRoomsList,
+      title: 'Back to rooms',
+      html: icon('arrowLeft', 18),
+      style: { marginRight: '4px' }
+    }));
+  }
+  head.appendChild(h('div', { class: 'logo-mark', html: icon('lock', 26, { stroke: '#04221a', strokeWidth: 2.5 }) }));
+  head.appendChild(h('div', null,
+    h('div', { class: 'setup-title' }, hasExistingRooms ? 'Add a room' : 'Hush'),
+    h('div', { class: 'setup-subtitle mono' }, 'End-to-end · AES-256-GCM')
+  ));
   card.appendChild(head);
 
   // Blurb (different for invited users)
@@ -1119,6 +1622,22 @@ function renderSetup() {
       style: { marginTop: '6px' }
     }, 'Your tag: #' + App.identity.tag));
   }
+
+  // Room nickname (local-only label so multi-chat list is readable)
+  card.appendChild(h('label', { class: 'field-label', style: { marginTop: '18px' } }, 'Room name (just for you)'));
+  const roomNameInput = h('input', {
+    class: 'field',
+    type: 'text',
+    placeholder: state.mode === 'new' ? 'e.g. Family · Project · Inner Circle' : 'e.g. Alice & Bob',
+    value: state.roomName || '',
+    maxLength: 40,
+    oninput: (e) => state.roomName = e.target.value,
+  });
+  card.appendChild(roomNameInput);
+  card.appendChild(h('div', {
+    class: 'fs-12 muted',
+    style: { marginTop: '6px', lineHeight: '1.5' }
+  }, 'A label only you see — helps you find this room in your list.'));
 
   // Key field
   card.appendChild(h('label', { class: 'field-label', style: { marginTop: '18px' } }, 'Shared key'));
@@ -1214,6 +1733,7 @@ function renderSetup() {
     state.error = '';
     const name = (state.name || '').trim();
     const key = (state.key || '').trim();
+    const roomName = (state.roomName || '').trim();
     if (!name) { state.error = 'Pick a display name.'; renderError(); return; }
     if (name.length > 24) { state.error = 'Name too long (24 max).'; renderError(); return; }
     if (key.length < 8) { state.error = 'Key must be at least 8 characters.'; renderError(); return; }
@@ -1229,18 +1749,20 @@ function renderSetup() {
       App.identity = identity;
       saveIdentity(identity);
 
-      App.session = {
-        roomKey: key,
+      // Save to room registry
+      const existing = findRoomByTopic(loadRooms(), topic);
+      const roomEntry = {
         topic,
-        cryptoKey,
-        transport: null,
-        messages: [],
-        seenIds: new Set(),
-        seenNonces: new Set(),
-        participants: new Set([userHandle()]),
-        connStatus: 'connecting',
+        roomKey: key,
+        name: roomName || existing?.name || (state.mode === 'new' ? 'New room' : 'Joined room'),
+        createdAt: existing?.createdAt || Date.now(),
+        unread: 0,
+        lastSeen: Date.now(),
       };
-      renderChat();
+      upsertRoom(roomEntry);
+
+      // Open it
+      await openRoom(topic);
     } catch (e) {
       console.error(e);
       state.error = 'Couldn\'t derive key. Try again.';
@@ -1282,16 +1804,22 @@ function renderChat() {
   const statusTextEl = h('span', null, 'connecting…');
 
   const header = h('header', { class: 'header' },
-    h('div', { class: 'logo-mark small', html: icon('lock', 17, { stroke: '#04221a', strokeWidth: 2.5 }) }),
+    h('button', {
+      class: 'btn btn-icon',
+      onclick: goToRoomsList,
+      title: 'Rooms',
+      html: icon('arrowLeft', 18),
+      style: { marginRight: '2px' }
+    }),
     h('div', { class: 'header-info' },
       h('div', { class: 'header-title' },
-        h('span', null, 'Encrypted Room'),
+        h('span', { class: 'header-room-name' }, session.roomName || 'Encrypted Room'),
         h('span', { class: 'pill' },
           h('span', { html: icon('shield', 11) }), 'E2EE'
         )
       ),
       h('div', { class: 'header-meta' },
-        h('span', null, shortId(session.topic)),
+        h('span', { class: 'mono' }, shortId(session.topic)),
         h('span', { class: 'sep' }, '·'),
         h('span', { class: 'dotcell' },
           h('span', { html: icon('users', 11) }),
@@ -1366,7 +1894,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v9')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v10')
     )
   );
   shell.appendChild(composer);
@@ -1686,9 +2214,14 @@ function renderChat() {
           teardown(); open = false;
         }),
         h('div', { class: 'menu-divider' }),
-        item('logOut', 'Leave room', () => {
+        item('arrowLeft', 'Back to rooms', () => {
           teardown(); open = false;
-          leave();
+          goToRoomsList();
+        }),
+        item('trash', 'Remove this room', () => {
+          teardown(); open = false;
+          const room = findRoomByTopic(loadRooms(), session.topic);
+          if (room) confirmRemoveRoom(room);
         })
       );
       // Position menu relative to trigger button. We append to document.body
@@ -1729,12 +2262,6 @@ function renderChat() {
       },
       html: icon('copy', 14)
     }));
-  }
-
-  function leave() {
-    transport.disconnect();
-    App.session = null;
-    renderSetup();
   }
 }
 
@@ -1947,7 +2474,22 @@ function init() {
     return;
   }
   App.identity = loadIdentity();
-  renderSetup();
+
+  const params = new URLSearchParams(location.search);
+  const isInvited = params.has('join');
+  const rooms = loadRooms();
+
+  // Routing logic:
+  // 1. If invited (?join), always show setup screen in Join mode
+  // 2. Else if rooms exist, show rooms list (and resume last room if remembered)
+  // 3. Else show setup (first-time user)
+  if (isInvited) {
+    renderSetup();
+  } else if (rooms.length > 0) {
+    renderRoomsList();
+  } else {
+    renderSetup();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
