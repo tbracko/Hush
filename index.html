@@ -739,6 +739,23 @@ textarea.field {
   place-items: center;
   box-shadow: 0 0 14px -2px rgba(0, 217, 127, 0.6);
 }
+.scanning-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-2);
+  opacity: 0.5;
+  animation: scanPulse 1.2s ease-in-out infinite;
+}
+@keyframes scanPulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50% { opacity: 0.7; transform: scale(1); }
+}
+.refresh-btn.spinning svg { animation: spinRefresh 1s linear infinite; }
+@keyframes spinRefresh {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .room-chevron { display: flex; opacity: 0.5; }
 
 /* Header room name should be allowed to truncate */
@@ -1074,6 +1091,30 @@ class NtfyTransport {
     });
     if (!res.ok) throw new Error('relay rejected message (' + res.status + ')');
   }
+
+  // One-shot fetch of cached messages (no persistent connection).
+  // Returns array of { id, time (ms), body } for messages cached on the relay.
+  // Used by the rooms list to compute unread counts without opening N SSE streams.
+  static async pollCached(topic, sinceSeconds = 43200, signal) {
+    const url = `${NTFY_BASE}/${topic}/json?poll=1&since=${sinceSeconds}s`;
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error('poll failed (' + res.status + ')');
+    const text = await res.text();
+    if (!text.trim()) return [];
+    // ntfy returns newline-delimited JSON
+    const out = [];
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const data = JSON.parse(trimmed);
+        if (data.event !== 'message') continue;
+        if (typeof data.message !== 'string') continue;
+        out.push({ id: data.id, time: data.time * 1000, body: data.message });
+      } catch (e) {}
+    }
+    return out;
+  }
 }
 
 /* =========================================================================
@@ -1289,19 +1330,33 @@ async function openRoom(topic) {
     seenNonces: new Set(),
     participants: new Set([userHandle()]),
     connStatus: 'connecting',
+    // Tracks the timestamp of the latest message the user has loaded/seen.
+    // Persisted to room registry on leave so unread can be calculated next visit.
+    latestSeenTs: room.lastSeen || 0,
   };
   App.view = 'chat';
 
-  // Mark as last opened, clear unread
   setLastRoom(topic);
-  upsertRoom({ ...room, unread: 0, lastSeen: Date.now() });
+  // Mark as actively visited
+  upsertRoom({ ...room, unread: 0 });
 
   renderChat();
 }
 
 function goToRoomsList() {
-  if (App.session?.transport) {
-    try { App.session.transport.disconnect(); } catch (e) {}
+  // Persist the latest-seen timestamp from the active session before leaving
+  if (App.session) {
+    const room = findRoomByTopic(loadRooms(), App.session.topic);
+    if (room) {
+      upsertRoom({
+        ...room,
+        lastSeen: Math.max(room.lastSeen || 0, App.session.latestSeenTs || Date.now()),
+        unread: 0,
+      });
+    }
+    if (App.session.transport) {
+      try { App.session.transport.disconnect(); } catch (e) {}
+    }
   }
   App.session = null;
   App.view = 'rooms';
@@ -1322,14 +1377,30 @@ function goToSetup() {
  *  ROOMS LIST SCREEN
  * ========================================================================= */
 
+// Tracks the active scan so it can be aborted on navigation/refresh
+let activeRoomsScan = null;
+
 function renderRoomsList() {
   const root = document.getElementById('app');
   clearChildren(root);
   App.view = 'rooms';
 
+  // Cancel any in-flight scan from a previous render
+  if (activeRoomsScan) {
+    try { activeRoomsScan.abort(); } catch (e) {}
+    activeRoomsScan = null;
+  }
+
   const rooms = loadRooms();
 
   const shell = h('div', { class: 'rooms-shell' });
+
+  // Refresh button (only shown if there are rooms)
+  const refreshBtn = h('button', {
+    class: 'btn btn-icon refresh-btn',
+    title: 'Check for new messages',
+    html: icon('refresh', 18)
+  });
 
   // Header
   const header = h('header', { class: 'header rooms-header' },
@@ -1349,6 +1420,7 @@ function renderRoomsList() {
         rooms.length > 0 ? h('span', null, rooms.length + (rooms.length === 1 ? ' room' : ' rooms')) : null,
       )
     ),
+    rooms.length > 0 ? refreshBtn : null,
     h('button', {
       class: 'btn btn-icon',
       onclick: goToSetup,
@@ -1361,12 +1433,17 @@ function renderRoomsList() {
   // Body
   const body = h('div', { class: 'rooms-body scroll-area' });
 
+  // Map of topic -> card element so we can update badges as scans complete
+  const cardByTopic = {};
+
   if (rooms.length === 0) {
     body.appendChild(renderRoomsEmpty());
   } else {
     const list = h('div', { class: 'rooms-list' });
     rooms.forEach(room => {
-      list.appendChild(renderRoomCard(room));
+      const card = renderRoomCard(room);
+      cardByTopic[room.topic] = card;
+      list.appendChild(card);
     });
     body.appendChild(list);
 
@@ -1379,6 +1456,69 @@ function renderRoomsList() {
 
   shell.appendChild(body);
   root.appendChild(shell);
+
+  // === Background scan ===
+  if (rooms.length > 0) {
+    refreshBtn.addEventListener('click', () => runScan(rooms, cardByTopic, refreshBtn));
+    runScan(rooms, cardByTopic, refreshBtn);
+  }
+}
+
+async function runScan(rooms, cardByTopic, refreshBtn) {
+  if (activeRoomsScan) { try { activeRoomsScan.abort(); } catch (e) {} }
+  const controller = new AbortController();
+  activeRoomsScan = controller;
+
+  refreshBtn.classList.add('spinning');
+  refreshBtn.disabled = true;
+
+  // Show a "scanning" state on each card
+  for (const topic in cardByTopic) {
+    setRoomCardBadge(cardByTopic[topic], 'scanning');
+  }
+
+  // Run scans in parallel — for 5 rooms total time ≈ slowest single fetch (~1-2s)
+  const results = await Promise.allSettled(
+    rooms.map(room => scanRoomForUnread(room, controller.signal))
+  );
+
+  if (controller.signal.aborted) return;
+
+  // Update each card and persist any fresh latestTs (helps keep our records sane)
+  rooms.forEach((room, i) => {
+    const r = results[i];
+    const card = cardByTopic[room.topic];
+    if (!card) return;
+    if (r.status === 'fulfilled') {
+      const { unread, latestTs } = r.value;
+      setRoomCardBadge(card, unread > 0 ? unread : 'none');
+      // Refresh the relative time in the meta line if we have a newer ts
+      if (latestTs > (room.lastSeen || room.createdAt || 0)) {
+        const meta = card.querySelector('.room-meta-time');
+        if (meta) meta.textContent = formatRelativeTime(latestTs);
+      }
+    } else {
+      setRoomCardBadge(card, 'none');
+    }
+  });
+
+  refreshBtn.classList.remove('spinning');
+  refreshBtn.disabled = false;
+  activeRoomsScan = null;
+}
+
+function setRoomCardBadge(card, state) {
+  const right = card.querySelector('.room-right');
+  if (!right) return;
+  const old = right.querySelector('.unread-badge, .scanning-dot');
+  if (old) old.remove();
+  if (state === 'scanning') {
+    const dot = h('div', { class: 'scanning-dot', title: 'Checking…' });
+    right.insertBefore(dot, right.firstChild);
+  } else if (typeof state === 'number' && state > 0) {
+    const badge = h('div', { class: 'unread-badge' }, String(state > 99 ? '99+' : state));
+    right.insertBefore(badge, right.firstChild);
+  }
 }
 
 function renderRoomsEmpty() {
@@ -1418,7 +1558,7 @@ function renderRoomCard(room) {
   info.appendChild(h('div', { class: 'room-meta mono' },
     shortId(room.topic),
     h('span', { class: 'sep' }, '·'),
-    h('span', null, formatRelativeTime(room.lastSeen || room.createdAt))
+    h('span', { class: 'room-meta-time' }, formatRelativeTime(room.lastSeen || room.createdAt))
   ));
   card.appendChild(info);
 
@@ -1538,6 +1678,43 @@ function confirmRemoveRoom(room) {
   setTimeout(() => overlay.addEventListener('click', close), 250);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+}
+
+// Poll a room's relay once and return { unread, latestTs, lastSender }.
+// `unread` counts decryptable messages with ts > lastSeen, excluding messages
+// the user themselves sent (they don't count as "unread for me").
+async function scanRoomForUnread(room, signal) {
+  try {
+    const cached = await NtfyTransport.pollCached(room.topic, 43200, signal);
+    if (!cached.length) return { unread: 0, latestTs: room.lastSeen || 0, lastSender: null };
+
+    const { cryptoKey } = await deriveSession(room.roomKey);
+    const me = userHandle();
+    const lastSeen = room.lastSeen || 0;
+    let unread = 0;
+    let latestTs = lastSeen;
+    let lastSender = null;
+    let lastMsgTs = 0;
+
+    for (const item of cached) {
+      let payload;
+      try {
+        payload = await decryptJSON(cryptoKey, item.body);
+      } catch (e) { continue; }
+      if (!payload || typeof payload.text !== 'string') continue;
+      const ts = typeof payload.ts === 'number' ? payload.ts : item.time;
+      if (ts > lastMsgTs) {
+        lastMsgTs = ts;
+        lastSender = String(payload.sender || '');
+      }
+      if (ts > latestTs) latestTs = ts;
+      if (ts > lastSeen && payload.sender !== me) unread++;
+    }
+    return { unread, latestTs, lastSender };
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    return { unread: 0, latestTs: room.lastSeen || 0, lastSender: null, error: true };
+  }
 }
 
 function formatRelativeTime(ts) {
@@ -1943,7 +2120,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v11')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v12')
     )
   );
   shell.appendChild(composer);
@@ -2111,6 +2288,7 @@ function renderChat() {
     session.messages.push(optimistic);
     session.seenNonces.add(nonce);
     session.participants.add(me);
+    if (ts > (session.latestSeenTs || 0)) session.latestSeenTs = ts;
     updateMembers();
     appendNewMessage(optimistic);
 
@@ -2176,6 +2354,8 @@ function renderChat() {
     };
     session.messages.push(m);
     session.participants.add(m.sender);
+    // User is actively in this room, so any message they receive counts as "seen"
+    if (m.ts > (session.latestSeenTs || 0)) session.latestSeenTs = m.ts;
     updateMembers();
     // Maintain order on append
     if (session.messages.length > 1 && m.ts < session.messages[session.messages.length - 2].ts) {
@@ -2193,8 +2373,19 @@ function renderChat() {
   transport.on('status', updateStatus);
   transport.connect();
 
-  // Cleanup on unload
-  window.addEventListener('beforeunload', () => transport.disconnect(), { once: true });
+  // Cleanup on unload — also persist what we've seen so unread count is fresh next time
+  window.addEventListener('beforeunload', () => {
+    if (App.session) {
+      const room = findRoomByTopic(loadRooms(), App.session.topic);
+      if (room) {
+        upsertRoom({
+          ...room,
+          lastSeen: Math.max(room.lastSeen || 0, App.session.latestSeenTs || Date.now()),
+        });
+      }
+    }
+    transport.disconnect();
+  }, { once: true });
 
   // Auto-focus
   setTimeout(() => textarea.focus(), 100);
