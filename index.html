@@ -11,7 +11,7 @@
 
 <!-- iOS Add-to-Home-Screen support: makes Hush launch as a fullscreen app -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="Hush" />
 <meta name="mobile-web-app-capable" content="yes" />
 
@@ -2133,7 +2133,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v13')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v14')
     )
   );
   shell.appendChild(composer);
