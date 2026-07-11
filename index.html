@@ -59,20 +59,8 @@ html, body {
 body {
   min-height: 100vh;
   min-height: 100dvh;
-  height: 100vh;
-  height: 100dvh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-}
-
-/* When launched from home screen as PWA, this matches the standalone display mode */
-@media (display-mode: standalone) {
-  body {
-    /* Forces the body to fill the screen, accounting for iOS quirks */
-    height: 100vh;
-    height: 100dvh;
-  }
 }
 
 #app {
@@ -2133,7 +2121,7 @@ function renderChat() {
     ),
     h('div', { class: 'composer-foot' },
       h('span', { html: icon('shield', 11) }),
-      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v14')
+      h('span', null, 'AES-256-GCM · relayed via ntfy.sh · v15')
     )
   );
   shell.appendChild(composer);
